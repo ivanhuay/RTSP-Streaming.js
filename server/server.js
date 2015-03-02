@@ -139,10 +139,10 @@ http.get('/004.jpg', function(req, res) {
  * Declaring inputs and outputs for the cameras
  **/
 var inputs = [
-	"rtsp://admin:admin@192.168.71.22/0",
-	"rtsp://admin:admin@192.168.71.23/0",
-	"rtsp://admin:admin@192.168.71.24/0",
-	"rtsp://admin:admin@192.168.71.25/0"
+	"rtsp://example",
+	"rtsp://example",
+	"rtsp://example",
+	"rtsp://example"
 	],
 	outputs = [
 	"001",
@@ -186,7 +186,12 @@ function callFFmpeg (i, input, prefixout) {
 	/**
 	 * Call to FFmpeg
 	 **/
-	children[i] = exec('ffmpeg -loglevel quiet -i ' + input + ' -r ' + rate + ' -s ' + quality + ' ' + extraparams + ' -f image2 -updatefirst 1 ' + basedir + imgdir + prefixout + '_' + suffixout + '.' + outextension, {maxBuffer: 2048*1024},
+	 //ffmpeg -i rtsp://server3.stweb.tv/c5n/live_media -ss 00:00:01 -f image2 -vframes 1 thumb.jpg
+	 //'ffmpeg -loglevel quiet -i ' + input + ' -r ' + rate + ' -s ' + quality + ' ' + extraparams + ' -f image2 -updatefirst 1 ' + basedir + imgdir + prefixout + '_' + suffixout + '.' + outextension
+	 //example data con forma original:
+	 //ffmpeg -loglevel quiet -i rtsp://server3.stweb.tv/c5n/live_media  -r 4 -s qvga -b:v 32k -f image2 -updatefirst 1 ../img/001_camaraip.jpg
+
+	children[i] = exec("ffmpeg -i "+ input +" -ss 00:00:01 -f image2 -vframes 1 " + basedir + imgdir + prefixout + '_' + suffixout + '.' + outextension, {maxBuffer: 2048*1024},
 		function (error, stdout, stderr) {
 			if (error !== null) {
 				console.error('FFmpeg\'s ' + prefixout + ' exec error: ' + error);
@@ -218,6 +223,7 @@ callSocket('003');
 callSocket('004');
 
 function callSocket (cam) {
+	console.log();
 io.of('/' + cam).on('connection', function (client) {
 	/**
 	 * @name imageWatcher
