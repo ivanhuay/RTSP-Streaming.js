@@ -17,11 +17,14 @@
 var	http = require('express').createServer(),
 		passport = require('passport'),
 		DigestStrategy = require('passport-http').DigestStrategy;
-		basedir = __dirname + '/../',
+		basedir = __dirname+'/',//__dirname + '/../',
 		imgdir = 'img/', // Where JPGs are going to be stored
 		io = require('socket.io').listen(http),
 		fs = require('fs'),
 		path = require('path');
+		var count=1;
+var exec = require('child_process').exec,
+    child;
 
 /**
  * Users for the system
@@ -113,47 +116,48 @@ io.configure('dev', function(){
  * Request manager from Express, using authentication with passport-http to send
  * client/index.html
  **/
-http.get('/', passport.authenticate('digest', { session: false }), function (req, res) {
-	res.sendfile(path.normalize(basedir) + '/client/index.html');
+ //passport.authenticate('digest', { session: false })
+http.get('/', function (req, res) {
+//console.log(basedir);
+
+	res.sendfile('/client/index.html',{root:basedir});
 });
 http.get('/iribarren.jpg', function (req, res) {
-	res.sendfile(path.normalize(basedir) + '/client/iribarren.jpg');
+	res.sendfile('/client/iribarren.jpg',{root:basedir});
 });
 http.get('/amtt.png', function(req, res) {
-	res.sendfile(path.normalize(basedir) + '/client/amtt.png');
+	res.sendfile('/client/amtt.png',{root:basedir});
 });
 http.get('/001.jpg', function(req, res) {
-	res.sendfile(path.normalize(basedir) + '/img/001_camaraip.jpg');
+	res.sendfile('/img/001_camaraip.jpg',{root:basedir});
 });
 http.get('/002.jpg', function(req, res) {
-	res.sendfile(path.normalize(basedir) + '/img/002_camaraip.jpg');
+	res.sendfile('/img/002_camaraip.jpg',{root:basedir});
 });
 http.get('/003.jpg', function(req, res) {
-	res.sendfile(path.normalize(basedir) + '/img/003_camaraip.jpg');
+	res.sendfile('/img/003_camaraip.jpg',{root:basedir});
 });
 http.get('/004.jpg', function(req, res) {
-	res.sendfile(path.normalize(basedir) + '/img/004_camaraip.jpg');
+	res.sendfile('/img/004_camaraip.jpg',{root:basedir});
 });
 
 /**
  * Declaring inputs and outputs for the cameras
  **/
 var inputs = [
-	"rtsp://example",
-	"rtsp://example",
-	"rtsp://example",
-	"rtsp://example"
+	"rtsp://server3.stweb.tv/c5n/live_media",
+	"rtsp://server3.stweb.tv/c5n/live_media",
+	
 	],
 	outputs = [
 	"001",
 	"002",
-	"003",
-	"004"
+	
 	],
 	totalchildren = inputs.length,
 	children = new Array(totalchildren),
 	loop = undefined,
-	frequency=10;
+	frequency=5;
 
 var checker = function() {
 	loop = setInterval( function() {
@@ -162,14 +166,15 @@ var checker = function() {
 				callFFmpeg( i, inputs[i], outputs[i]);
 			}
 		};
+		count++;
 	}, frequency*1000);
 }
 
-var	rate = 4,
+var	rate = 1,
 		suffixout = 'camaraip',
 		outextension = 'jpg';
 
-function callFFmpeg (i, input, prefixout) {
+function callFFmpeg (i, input, prefixout,client, callback) {
 
 	/**
 	 * Variables for FFmpeg
@@ -190,14 +195,24 @@ function callFFmpeg (i, input, prefixout) {
 	 //'ffmpeg -loglevel quiet -i ' + input + ' -r ' + rate + ' -s ' + quality + ' ' + extraparams + ' -f image2 -updatefirst 1 ' + basedir + imgdir + prefixout + '_' + suffixout + '.' + outextension
 	 //example data con forma original:
 	 //ffmpeg -loglevel quiet -i rtsp://server3.stweb.tv/c5n/live_media  -r 4 -s qvga -b:v 32k -f image2 -updatefirst 1 ../img/001_camaraip.jpg
+	console.log("ffmpeg -i "+ input +" -ss 00:00:01 -f image2 -vframes 1 " + basedir + imgdir + prefixout + '_'+count+"_" + suffixout + '.' + outextension, {maxBuffer: 2048*1024});
+		  var cmd = "ffmpeg -i "+ input +" -ss 00:00:01 -f image2 -vframes 1 " + basedir + imgdir + prefixout + '_'+count+"_" + suffixout + '.' + outextension
+	children[i] = require('child_process').exec(cmd,{maxBuffer: 2048*1024}, function (error, stdout, stderr) {
+				if (error !== null) {
+					console.error('FFmpeg\'s ' + prefixout + ' exec error: ' + error);
+					if(typeof callback == "function"){
+						callback(client,basedir + imgdir + prefixout + '_'+count+"_" + suffixout + '.' + outextension);
+					}else{
+						console.log("not function: "+callback);
+					}
+				}
+		}
+		  	
+	);
+			
+		
 
-	children[i] = exec("ffmpeg -i "+ input +" -ss 00:00:01 -f image2 -vframes 1 " + basedir + imgdir + prefixout + '_' + suffixout + '.' + outextension, {maxBuffer: 2048*1024},
-		function (error, stdout, stderr) {
-			if (error !== null) {
-				console.error('FFmpeg\'s ' + prefixout + ' exec error: ' + error);
-			}
-	});
-
+	
 	children[i].on('exit', function (code) {
 		console.log('FFmpeg child: ' + inputs[i] + ' exited and is being re-launched');
 		children[i] = undefined;
@@ -233,18 +248,29 @@ io.of('/' + cam).on('connection', function (client) {
 //	var imgcount = 0;
 	console.log( basedir + imgdir);
 	setInterval( function() {
-		fs.readFile( basedir + imgdir + cam + '_' + suffixout + '.' + outextension,
-			function(err, content) {
-				if (err) {
-					throw err;
-				} else {
-//					++imgcount;
-//					console.log( 'Transformation #' + imgcount);
-					client.volatile.emit('message', {
-						data: content.toString('base64')
-					});
-				}
-			});
+		for (var i = 0; i < totalchildren; i++) {
+			if (children[i] == undefined) {
+				callFFmpeg( i, inputs[i], outputs[i],client, function (client,filename){
+
+					if(count>=2){
+						fs.readFile( filename,
+							function(err, content) {
+								if (err) {
+									throw err;
+								} else {
+				
+									console.log(content.toString('base64'));
+									client.volatile.emit('message', {
+										data: content.toString('base64')
+									});
+								}
+							});
+						
+					}
+				});
+			}
+		};
+		count++;
 	}, 1000/rate);
 });
 }
